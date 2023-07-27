@@ -156,6 +156,7 @@ func (cfg *config) checkLogs(i int, m ApplyMsg) (string, bool) {
 // contents
 func (cfg *config) applier(i int, applyCh chan ApplyMsg) {
 	for m := range applyCh {
+		log.Printf("...applyC %v to client", m)
 		if m.CommandValid == false {
 			// ignore other types of ApplyMsg
 		} else {
@@ -526,6 +527,7 @@ func (cfg *config) one(cmd interface{}, expectedServers int, retry bool) int {
 			t1 := time.Now()
 			for time.Since(t1).Seconds() < 2 {
 				nd, cmd1 := cfg.nCommitted(index)
+				log.Printf("...nd:%d, cmd1:%v", nd, cmd1)
 				if nd > 0 && nd >= expectedServers {
 					// committed
 					if cmd1 == cmd {

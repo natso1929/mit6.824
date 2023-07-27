@@ -8,7 +8,10 @@ package raft
 // test with the original before submitting.
 //
 
-import "testing"
+import (
+	"log"
+	"testing"
+)
 import "fmt"
 import "time"
 import "math/rand"
@@ -189,7 +192,7 @@ func TestFailAgree2B(t *testing.T) {
 	// disconnect one follower from the network.
 	leader := cfg.checkOneLeader()
 	cfg.disconnect((leader + 1) % servers)
-
+	log.Printf("...server %d disconnect", (leader+1)%servers)
 	// the leader and remaining follower should be
 	// able to agree despite the disconnected follower.
 	cfg.one(102, servers-1, false)
@@ -199,6 +202,7 @@ func TestFailAgree2B(t *testing.T) {
 	cfg.one(105, servers-1, false)
 
 	// re-connect
+	log.Printf("...server %d connect", (leader+1)%servers)
 	cfg.connect((leader + 1) % servers)
 
 	// the full set of servers should preserve
@@ -222,8 +226,11 @@ func TestFailNoAgree2B(t *testing.T) {
 
 	// 3 of 5 followers disconnect
 	leader := cfg.checkOneLeader()
+	log.Printf("...leader %v disconnect", (leader+1)%servers)
 	cfg.disconnect((leader + 1) % servers)
+	log.Printf("...leader %v disconnect", (leader+2)%servers)
 	cfg.disconnect((leader + 2) % servers)
+	log.Printf("...leader %v disconnect", (leader+3)%servers)
 	cfg.disconnect((leader + 3) % servers)
 
 	index, _, ok := cfg.rafts[leader].Start(20)
@@ -242,11 +249,14 @@ func TestFailNoAgree2B(t *testing.T) {
 	}
 
 	// repair
+	log.Printf("...leader %v connect", (leader+1)%servers)
 	cfg.connect((leader + 1) % servers)
+	log.Printf("...leader %v connect", (leader+2)%servers)
 	cfg.connect((leader + 2) % servers)
+	log.Printf("...leader %v connect", (leader+3)%servers)
 	cfg.connect((leader + 3) % servers)
 
-	// the disconnected majority may have chosen a leader from
+	// the disconnected majority may have ch	osen a leader from
 	// among their own ranks, forgetting index 2.
 	leader2 := cfg.checkOneLeader()
 	index2, _, ok2 := cfg.rafts[leader2].Start(30)
@@ -412,7 +422,10 @@ func TestBackup2B(t *testing.T) {
 
 	// put leader and one follower in a partition
 	leader1 := cfg.checkOneLeader()
+	log.Printf("...server %v disconnect", (leader1+2)%servers)
 	cfg.disconnect((leader1 + 2) % servers)
+	log.Printf("...server %v disconnect", (leader1+3)%servers)
+	log.Printf("...server %v disconnect", (leader1+4)%servers)
 	cfg.disconnect((leader1 + 3) % servers)
 	cfg.disconnect((leader1 + 4) % servers)
 
@@ -423,10 +436,15 @@ func TestBackup2B(t *testing.T) {
 
 	time.Sleep(RaftElectionTimeout / 2)
 
+	log.Printf("...leader %v disconnect", (leader1+0)%servers)
+	log.Printf("...server %v disconnect", (leader1+1)%servers)
 	cfg.disconnect((leader1 + 0) % servers)
 	cfg.disconnect((leader1 + 1) % servers)
 
 	// allow other partition to recover
+	log.Printf("...server %v connect", (leader1+2)%servers)
+	log.Printf("...server %v connect", (leader1+3)%servers)
+	log.Printf("...server %v connect", (leader1+4)%servers)
 	cfg.connect((leader1 + 2) % servers)
 	cfg.connect((leader1 + 3) % servers)
 	cfg.connect((leader1 + 4) % servers)
@@ -442,6 +460,7 @@ func TestBackup2B(t *testing.T) {
 	if leader2 == other {
 		other = (leader2 + 1) % servers
 	}
+	log.Printf("...other %v disconnect", other)
 	cfg.disconnect(other)
 
 	// lots more commands that won't commit
@@ -455,6 +474,10 @@ func TestBackup2B(t *testing.T) {
 	for i := 0; i < servers; i++ {
 		cfg.disconnect(i)
 	}
+	log.Printf("...leader1 %v connect", (leader1+0)%servers)
+	log.Printf("...server %v connect", (leader1+1)%servers)
+	log.Printf("...other %v connect", other)
+
 	cfg.connect((leader1 + 0) % servers)
 	cfg.connect((leader1 + 1) % servers)
 	cfg.connect(other)
@@ -466,6 +489,7 @@ func TestBackup2B(t *testing.T) {
 
 	// now everyone
 	for i := 0; i < servers; i++ {
+		log.Printf("...everyone server %v connect", i)
 		cfg.connect(i)
 	}
 	cfg.one(rand.Int(), servers, true)
@@ -594,34 +618,49 @@ func TestPersist12C(t *testing.T) {
 
 	// crash and re-start all
 	for i := 0; i < servers; i++ {
+		log.Printf("...crash and restart:%d", i)
 		cfg.start1(i, cfg.applier)
 	}
 	for i := 0; i < servers; i++ {
+		log.Printf("...disconnect: %d", i)
 		cfg.disconnect(i)
+		log.Printf("...connect: %d", i)
 		cfg.connect(i)
 	}
 
 	cfg.one(12, servers, true)
 
 	leader1 := cfg.checkOneLeader()
+	log.Printf("...disconnect leader1: %d", leader1)
 	cfg.disconnect(leader1)
+	log.Printf("...crash and restart leader1:%d", leader1)
 	cfg.start1(leader1, cfg.applier)
+
+	log.Printf("...connect leader1: %d", leader1)
 	cfg.connect(leader1)
 
 	cfg.one(13, servers, true)
 
 	leader2 := cfg.checkOneLeader()
+	log.Printf("...disconnect leader2: %d", leader2)
 	cfg.disconnect(leader2)
 	cfg.one(14, servers-1, true)
+
+	log.Printf("...crash and restart leader2:%d", leader2)
 	cfg.start1(leader2, cfg.applier)
+
+	log.Printf("...connect leader2: %d", leader2)
 	cfg.connect(leader2)
 
 	cfg.wait(4, servers, -1) // wait for leader2 to join before killing i3
 
 	i3 := (cfg.checkOneLeader() + 1) % servers
+	log.Printf("...disconnect i3: %d", i3)
 	cfg.disconnect(i3)
 	cfg.one(15, servers-1, true)
+	log.Printf("...crash and restart i3:%d", i3)
 	cfg.start1(i3, cfg.applier)
+	log.Printf("...connect i3: %d", i3)
 	cfg.connect(i3)
 
 	cfg.one(16, servers, true)
@@ -638,35 +677,51 @@ func TestPersist22C(t *testing.T) {
 
 	index := 1
 	for iters := 0; iters < 5; iters++ {
+		log.Printf("...cur times:%d", iters+1)
 		cfg.one(10+index, servers, true)
 		index++
 
 		leader1 := cfg.checkOneLeader()
+		log.Printf("...disconnect server: %d", (leader1+1)%servers)
 
 		cfg.disconnect((leader1 + 1) % servers)
+		log.Printf("...disconnect server: %d", (leader1+2)%servers)
+
 		cfg.disconnect((leader1 + 2) % servers)
 
 		cfg.one(10+index, servers-2, true)
 		index++
 
+		log.Printf("...disconnect leader1: %d", leader1)
 		cfg.disconnect((leader1 + 0) % servers)
+		log.Printf("...disconnect server: %d", (leader1+3)%servers)
 		cfg.disconnect((leader1 + 3) % servers)
+		log.Printf("...disconnect server: %d", (leader1+4)%servers)
 		cfg.disconnect((leader1 + 4) % servers)
 
+		log.Printf("...crash and restart server:%d", (leader1+1)%servers)
 		cfg.start1((leader1+1)%servers, cfg.applier)
+		log.Printf("...crash and restart server:%d", (leader1+2)%servers)
 		cfg.start1((leader1+2)%servers, cfg.applier)
+
+		log.Printf("...connect server: %d", (leader1+1)%servers)
 		cfg.connect((leader1 + 1) % servers)
+		log.Printf("...connect server: %d", (leader1+2)%servers)
 		cfg.connect((leader1 + 2) % servers)
 
 		time.Sleep(RaftElectionTimeout)
 
+		log.Printf("...crash and restart server:%d", (leader1+3)%servers)
 		cfg.start1((leader1+3)%servers, cfg.applier)
+		log.Printf("...connect server: %d", (leader1+3)%servers)
+
 		cfg.connect((leader1 + 3) % servers)
 
 		cfg.one(10+index, servers-2, true)
 		index++
-
+		log.Printf("...connect server: %d", (leader1+4)%servers)
 		cfg.connect((leader1 + 4) % servers)
+		log.Printf("...connect leader1: %d", leader1)
 		cfg.connect((leader1 + 0) % servers)
 	}
 
@@ -743,16 +798,19 @@ func TestFigure82C(t *testing.T) {
 			ms := (rand.Int63() % 13)
 			time.Sleep(time.Duration(ms) * time.Millisecond)
 		}
-
+		log.Printf("...cur leader:%d", leader)
 		if leader != -1 {
+			log.Printf("...crash and restart leader:%d", leader)
 			cfg.crash1(leader)
 			nup -= 1
 		}
-
+		log.Printf("...cur nup:%d", nup)
 		if nup < 3 {
 			s := rand.Int() % servers
 			if cfg.rafts[s] == nil {
+				log.Printf("...crash and restart server:%d", s)
 				cfg.start1(s, cfg.applier)
+				log.Printf("...connect server:%d", s)
 				cfg.connect(s)
 				nup += 1
 			}
@@ -761,7 +819,9 @@ func TestFigure82C(t *testing.T) {
 
 	for i := 0; i < servers; i++ {
 		if cfg.rafts[i] == nil {
+			log.Printf("...crash and restart server:%d", i)
 			cfg.start1(i, cfg.applier)
+			log.Printf("...connect server:%d", i)
 			cfg.connect(i)
 		}
 	}
@@ -821,7 +881,7 @@ func TestFigure8Unreliable2C(t *testing.T) {
 				leader = i
 			}
 		}
-
+		log.Printf("...leader:%v", leader)
 		if (rand.Int() % 1000) < 100 {
 			ms := rand.Int63() % (int64(RaftElectionTimeout/time.Millisecond) / 2)
 			time.Sleep(time.Duration(ms) * time.Millisecond)
@@ -831,21 +891,25 @@ func TestFigure8Unreliable2C(t *testing.T) {
 		}
 
 		if leader != -1 && (rand.Int()%1000) < int(RaftElectionTimeout/time.Millisecond)/2 {
+			log.Printf("...disconnect server:%d", leader)
 			cfg.disconnect(leader)
 			nup -= 1
 		}
-
+		log.Printf("...nup:%v", nup)
 		if nup < 3 {
 			s := rand.Int() % servers
 			if cfg.connected[s] == false {
+				log.Printf("...connect server:%d", s)
 				cfg.connect(s)
 				nup += 1
+				log.Printf("...nup:%v", nup)
 			}
 		}
 	}
 
 	for i := 0; i < servers; i++ {
 		if cfg.connected[i] == false {
+			log.Printf("...connect server:%d", i)
 			cfg.connect(i)
 		}
 	}
@@ -1084,3 +1148,13 @@ func TestSnapshotInstallCrash2D(t *testing.T) {
 func TestSnapshotInstallUnCrash2D(t *testing.T) {
 	snapcommon(t, "Test (2D): install snapshots (unreliable+crash)", false, false, true)
 }
+
+//func Test_a(t *testing.T) {
+//	arr := []int{1, 2}
+//	arr = arr[:0]
+//	if arr == nil {
+//		fmt.Println("yes")
+//		return
+//	}
+//
+//}
